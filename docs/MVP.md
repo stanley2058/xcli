@@ -41,7 +41,7 @@ This workspace contains a Bun + TypeScript CLI that wraps the official X TypeScr
 - Streaming endpoints
 - Pagination helpers (auto-fetching all pages); only single-page lookups are supported
 - Caching, local storage, or persistence of API results (except local cache for WOEID index lookup)
-- Config files (no `~/.config/xcli/...`), keychain integration, or interactive prompts
+- Keychain integration or interactive auth prompts
 - Automatic rate-limit backoff / retry scheduling (beyond the SDK's basic retry settings)
 - NDJSON and custom export formats (CSV, markdown, etc.)
 - Shell completion generation
@@ -55,8 +55,11 @@ Set one of:
 
 - `X_API_BEARER_TOKEN` (recommended)
 - `BEARER_TOKEN` (fallback)
+- `~/.config/xcli/config.json` with `{"bearerToken": "..."}`
 
 Or pass `--bearer-token <token>`.
+
+Precedence is: `--bearer-token` > env vars > config file.
 
 ## References
 

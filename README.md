@@ -50,6 +50,17 @@ bun run xcli -- fields users
 bun run xcli -- fields trends
 ```
 
+Persistent config:
+
+```json
+{
+  "bearerToken": "YOUR_X_API_BEARER_TOKEN"
+}
+```
+
+- Save as `~/.config/xcli/config.json`.
+- Precedence is: `--bearer-token` > env vars (`X_API_BEARER_TOKEN`, `BEARER_TOKEN`) > config file.
+
 Notes:
 
 - Default output is human-readable tables.

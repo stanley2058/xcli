@@ -27,7 +27,7 @@ export function printRootHelp(opts: HelpOpts): void {
   printLine("  xcli users by-username XDevelopers   # explicit mode");
   printLine("");
   printLine("Auth:");
-  printLine("  Set X_API_BEARER_TOKEN in your environment.");
+  printLine("  Set X_API_BEARER_TOKEN (or BEARER_TOKEN), or ~/.config/xcli/config.json (bearerToken).");
 
   if (!opts.all) {
     printLine("");
@@ -42,7 +42,7 @@ export function printRootHelp(opts: HelpOpts): void {
   printLine("  --json                     Output compact JSON");
   printLine("  --json-pretty              Output pretty JSON");
   printLine("  --raw                      Output raw HTTP wrapper (status/headers/body)");
-  printLine("  --bearer-token <token>     Override env var X_API_BEARER_TOKEN");
+  printLine("  --bearer-token <token>     Override env/config bearer token");
   printLine("  --timeout <ms>             Request timeout in milliseconds");
   printLine("  --retries <n>              Max retries for transient failures");
   printLine("");
