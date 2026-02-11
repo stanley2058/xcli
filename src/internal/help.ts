@@ -9,15 +9,16 @@ export function printRootHelp(opts: HelpOpts): void {
   printLine("  xcli [--help] [--help-all] <command> [args] [options]");
   printLine("");
   printLine("Commands:");
-  printLine("  users         Read user data (lookup endpoints)");
-  printLine("  posts         Read post data (lookup endpoints)");
+  printLine("  users         Lookup users (inferred input or explicit subcommands)");
+  printLine("  posts         Lookup posts (inferred input or explicit subcommands)");
   printLine("  fields        Show field/expansion references");
   printLine("");
-  printLine("Examples:");
-  printLine("  xcli users by-username XDevelopers --pretty");
-  printLine("  xcli posts by-id 1228393702244134912 --pretty");
-  printLine("  xcli posts by-id https://x.com/XDevelopers/status/1228393702244134912");
-  printLine("  xcli fields users");
+  printLine("Quick examples:");
+  printLine("  xcli users XDevelopers");
+  printLine("  xcli users 2244994945");
+  printLine("  xcli posts https://x.com/XDevelopers/status/1228393702244134912");
+  printLine("  xcli posts 1228393702244134912 1227640996038684673");
+  printLine("  xcli users by-username XDevelopers   # explicit mode");
   printLine("");
   printLine("Auth:");
   printLine("  Set X_API_BEARER_TOKEN in your environment.");
@@ -31,30 +32,36 @@ export function printRootHelp(opts: HelpOpts): void {
   printLine("");
   printLine("Global options:");
   printLine("  -h, --help                 Show help for a command");
-  printLine("  --help-all                  Show verbose help (all options)");
-  printLine("  --pretty                    Pretty-print JSON output");
-  printLine("  --raw                       Output raw HTTP response wrapper (status/headers/body)");
-  printLine("  --bearer-token <token>      Override env var X_API_BEARER_TOKEN");
-  printLine("  --timeout <ms>              Request timeout in milliseconds");
-  printLine("  --retries <n>               Max retries for transient failures");
+  printLine("  --help-all                 Show verbose help (all options)");
+  printLine("  --json                     Output compact JSON");
+  printLine("  --json-pretty              Output pretty JSON");
+  printLine("  --raw                      Output raw HTTP wrapper (status/headers/body)");
+  printLine("  --bearer-token <token>     Override env var X_API_BEARER_TOKEN");
+  printLine("  --timeout <ms>             Request timeout in milliseconds");
+  printLine("  --retries <n>              Max retries for transient failures");
+  printLine("");
+  printLine("Human-readable output is default and uses color when enabled.");
+  printLine("Color rules: honors TTY, NO_COLOR, and FORCE_COLOR.");
 }
 
 export function printUsersHelp(opts: HelpOpts): void {
   printLine("xcli users - user lookup");
   printLine("");
-  printLine("Usage:");
-  printLine("  xcli users [--help] <subcommand> [args] [options]");
+  printLine("Inferred usage (default):");
+  printLine("  xcli users <id|ids|username|usernames|url|urls>");
   printLine("");
-  printLine("Subcommands:");
-  printLine("  by-id <id>");
-  printLine("  by-username <username|@username>");
-  printLine("  by-ids <id...>");
-  printLine("  by-usernames <username...>");
+  printLine("Explicit usage (also supported):");
+  printLine("  xcli users by-id <id>");
+  printLine("  xcli users by-username <username|@username>");
+  printLine("  xcli users by-ids <id...>");
+  printLine("  xcli users by-usernames <username...>");
   printLine("");
   printLine("Examples:");
-  printLine("  xcli users by-id 2244994945 --pretty");
-  printLine("  xcli users by-username XDevelopers --preset profile --pretty");
-  printLine("  xcli users by-usernames XDevelopers X elonmusk --user-fields created_at,verified");
+  printLine("  xcli users XDevelopers");
+  printLine("  xcli users @XDevelopers");
+  printLine("  xcli users 2244994945 783214");
+  printLine("  xcli users https://x.com/XDevelopers");
+  printLine("  xcli users https://x.com/XDevelopers/status/1228393702244134912");
 
   if (!opts.all) {
     printLine("");
@@ -68,6 +75,9 @@ export function printUsersHelp(opts: HelpOpts): void {
   printLine("  --user-fields <csv>         Maps to user.fields");
   printLine("  --expansions <csv>          Maps to expansions");
   printLine("  --tweet-fields <csv>        Maps to tweet.fields (when expansions include tweets)");
+  printLine("  --json                      Output compact JSON");
+  printLine("  --json-pretty               Output pretty JSON");
+  printLine("  --raw                       Raw HTTP output (debug)");
   printLine("");
   printLine("Help for fields:");
   printLine("  xcli fields users");
@@ -76,19 +86,17 @@ export function printUsersHelp(opts: HelpOpts): void {
 export function printPostsHelp(opts: HelpOpts): void {
   printLine("xcli posts - post lookup");
   printLine("");
-  printLine("Usage:");
-  printLine("  xcli posts [--help] <subcommand> [args] [options]");
+  printLine("Inferred usage (default):");
+  printLine("  xcli posts <id|ids|url|urls>");
   printLine("");
-  printLine("Subcommands:");
-  printLine("  by-id <id|url>");
-  printLine("  by-ids <id...>");
+  printLine("Explicit usage (also supported):");
+  printLine("  xcli posts by-id <id|url>");
+  printLine("  xcli posts by-ids <id...>");
   printLine("");
   printLine("Examples:");
-  printLine("  xcli posts by-id 1228393702244134912 --pretty");
-  printLine("  xcli posts by-id https://x.com/XDevelopers/status/1228393702244134912 --pretty");
-  printLine(
-    "  xcli posts by-id 1228393702244134912 --preset post --tweet-fields created_at,public_metrics,author_id --expansions author_id --user-fields username,verified"
-  );
+  printLine("  xcli posts 1228393702244134912");
+  printLine("  xcli posts 1228393702244134912 1227640996038684673");
+  printLine("  xcli posts https://x.com/XDevelopers/status/1228393702244134912");
 
   if (!opts.all) {
     printLine("");
@@ -105,6 +113,9 @@ export function printPostsHelp(opts: HelpOpts): void {
   printLine("  --media-fields <csv>        Maps to media.fields (when expanding media)");
   printLine("  --poll-fields <csv>         Maps to poll.fields (when expanding polls)");
   printLine("  --place-fields <csv>        Maps to place.fields (when expanding places)");
+  printLine("  --json                      Output compact JSON");
+  printLine("  --json-pretty               Output pretty JSON");
+  printLine("  --raw                       Raw HTTP output (debug)");
   printLine("");
   printLine("Help for fields:");
   printLine("  xcli fields posts");
@@ -141,7 +152,7 @@ export function printFieldsHelp(
     printLine("");
     printLine("Notes:");
     printLine("  - X API v2 returns minimal fields by default.");
-    printLine("  - To include related objects you must use expansions, then request fields for those objects.");
+    printLine("  - To include related objects use expansions, then request fields for those objects.");
     return;
   }
 

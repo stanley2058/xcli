@@ -6,16 +6,22 @@ This workspace contains a Bun + TypeScript CLI that wraps the official X TypeScr
 
 - Bearer-token auth only (app-only)
 - Commands:
-  - `xcli users by-id <id>`
-  - `xcli users by-username <username|@username>`
-  - `xcli users by-ids <id...>`
-  - `xcli users by-usernames <username...>`
-  - `xcli posts by-id <id|url>` (accepts `https://x.com/.../status/<id>`)
-  - `xcli posts by-ids <id...>`
+  - Inferred default:
+    - `xcli users <id|ids|username|usernames|url|urls>`
+    - `xcli posts <id|ids|url|urls>`
+  - Explicit subcommands (still supported):
+    - `xcli users by-id <id>`
+    - `xcli users by-username <username|@username>`
+    - `xcli users by-ids <id...>`
+    - `xcli users by-usernames <username...>`
+    - `xcli posts by-id <id|url>`
+    - `xcli posts by-ids <id...>`
   - `xcli fields users|posts` (quick references and doc links)
 - Output:
-  - JSON to stdout (default)
-  - `--pretty` for readable JSON
+  - Human-readable output by default (tables)
+  - Color and styles, respecting TTY, `NO_COLOR`, and `FORCE_COLOR`
+  - `--json` for compact JSON
+  - `--json-pretty` for indented JSON
   - `--raw` to print status + headers + body (useful for debugging rate limits)
 - Help:
   - `--help` at root and on subcommands, e.g. `xcli users --help`
@@ -27,11 +33,11 @@ This workspace contains a Bun + TypeScript CLI that wraps the official X TypeScr
 - Any write actions (create/delete posts, likes, follows, bookmarks, etc.)
 - Streaming endpoints
 - Search endpoints (recent search, full-archive search)
-- Pagination helpers (auto-fetching all pages); only single-request lookups are supported
+- Pagination helpers (auto-fetching all pages); only single-page lookups are supported
 - Caching, local storage, or persistence of results
 - Config files (no `~/.config/xcli/...`), keychain integration, or interactive prompts
 - Automatic rate-limit backoff / retry scheduling (beyond the SDK's basic retry settings)
-- Table/NDJSON output formats (JSON only)
+- NDJSON and custom export formats (CSV, markdown, etc.)
 - Shell completion generation
 - Publishing as an npm package or compiled binary
 - Automatic discovery of "all available fields" from OpenAPI at runtime
