@@ -2,12 +2,13 @@ import {
   compactWhitespace,
   formatDateShort,
   formatNumber,
+  getUsableTerminalWidth,
   getObject,
   printLine,
   renderTable,
   style,
   toArray,
-  truncate,
+  wrapText,
 } from "./util.ts";
 import {
   collectPostMedia,
@@ -65,6 +66,24 @@ function printMeta(response: Record<string, unknown>): void {
   printLine(style(`Meta: ${parts.join(" ")}`, "dim"));
 }
 
+function printTable(
+  headers: string[],
+  rows: string[][],
+  minWidths?: number[],
+  widthOverride?: number
+): void {
+  const width = widthOverride ?? getUsableTerminalWidth(80);
+  const lines = renderTable(
+    headers.map((h) => style(h, "bold")),
+    rows,
+    { maxWidth: width, minWidths }
+  );
+
+  for (const line of lines) {
+    printLine(line);
+  }
+}
+
 export function printUsersHuman(response: unknown): void {
   const obj = getObject(response);
   if (!obj) {
@@ -96,24 +115,25 @@ export function printUsersHuman(response: unknown): void {
 
     return [
       String(user["id"] ?? "-"),
-      truncate(username, 24),
-      truncate(String(user["name"] ?? "-"), 28),
+      username,
+      String(user["name"] ?? "-"),
       verified,
       formatNumber(pickField(metrics ?? {}, ["followers_count", "followersCount"])),
       formatNumber(pickField(metrics ?? {}, ["tweet_count", "tweetCount"])),
     ];
   });
 
-  for (const line of renderTable(headers.map((h) => style(h, "bold")), rows)) {
-    printLine(line);
-  }
+  printTable(headers, rows, [8, 9, 12, 8, 9, 5]);
 
   if (users.length === 1) {
     const description = users[0]?.["description"];
     if (typeof description === "string" && description.trim().length > 0) {
       printLine("");
       printLine(style("Bio", "bold"));
-      printLine(description.trim());
+      const bioWidth = Math.max(20, getUsableTerminalWidth(80));
+      for (const line of wrapText(description.trim(), bioWidth)) {
+        printLine(line);
+      }
     }
   }
 
@@ -150,8 +170,8 @@ export function printPostsHuman(response: unknown): void {
     if (id && username) userById.set(id, `@${username}`);
   }
 
-  const headers = ["ID", "Author", "Created", "Likes", "Replies", "Reposts", "Media", "DL", "Text"];
-  const rows = posts.map((post) => {
+  const tableWidth = getUsableTerminalWidth(80);
+  const prepared = posts.map((post) => {
     const metrics = pickObjectField(post, ["public_metrics", "publicMetrics"]);
     const text = typeof post["text"] === "string" ? compactWhitespace(post["text"]) : "-";
     const repostCount = pickField(metrics ?? {}, [
@@ -165,22 +185,50 @@ export function printPostsHuman(response: unknown): void {
     const author = authorId ? userById.get(authorId) ?? authorId : "-";
     const mediaSummary = summaries.get(postId);
 
-    return [
-      String(post["id"] ?? "-"),
-      truncate(author, 22),
-      formatDateShort(pickField(post, ["created_at", "createdAt"])),
-      formatNumber(pickField(metrics ?? {}, ["like_count", "likeCount"])),
-      formatNumber(pickField(metrics ?? {}, ["reply_count", "replyCount"])),
-      formatNumber(repostCount),
-      formatPostMediaSummary(mediaSummary),
-      formatPostMediaDownloadable(mediaSummary),
-      truncate(text, 48),
-    ];
+    return {
+      id: String(post["id"] ?? "-"),
+      author,
+      created: formatDateShort(pickField(post, ["created_at", "createdAt"])),
+      likes: formatNumber(pickField(metrics ?? {}, ["like_count", "likeCount"])),
+      replies: formatNumber(pickField(metrics ?? {}, ["reply_count", "replyCount"])),
+      reposts: formatNumber(repostCount),
+      media: formatPostMediaSummary(mediaSummary),
+      downloadable: formatPostMediaDownloadable(mediaSummary),
+      text,
+    };
   });
 
-  for (const line of renderTable(headers.map((h) => style(h, "bold")), rows)) {
-    printLine(line);
+  if (tableWidth < 100) {
+    const headers = ["ID", "Author", "Created", "Media", "DL", "Text"];
+    const rows = prepared.map((post) => [
+      post.id,
+      post.author,
+      post.created,
+      post.media,
+      post.downloadable,
+      post.text,
+    ]);
+
+    printTable(headers, rows, [19, 12, 10, 5, 2, 20], tableWidth);
+    printWarnings(obj);
+    printMeta(obj);
+    return;
   }
+
+  const headers = ["ID", "Author", "Created", "Likes", "Replies", "Reposts", "Media", "DL", "Text"];
+  const rows = prepared.map((post) => [
+    post.id,
+    post.author,
+    post.created,
+    post.likes,
+    post.replies,
+    post.reposts,
+    post.media,
+    post.downloadable,
+    post.text,
+  ]);
+
+  printTable(headers, rows, [19, 8, 10, 5, 7, 7, 5, 2, 20], tableWidth);
 
   printWarnings(obj);
   printMeta(obj);
@@ -223,14 +271,12 @@ export function printTrendsHuman(response: unknown): void {
       trend["postCount"];
 
     return [
-      truncate(String(name), 64),
+      String(name),
       formatNumber(count),
     ];
   });
 
-  for (const line of renderTable(headers.map((h) => style(h, "bold")), rows)) {
-    printLine(line);
-  }
+  printTable(headers, rows, [20, 8]);
 
   printWarnings(obj);
 }
@@ -255,15 +301,13 @@ export function printWoeidMatchesHuman(
   const headers = ["WOEID", "Place", "Country", "Code", "Type"];
   const rows = matches.map((m) => [
     String(m.woeid),
-    truncate(m.placeName, 32),
-    truncate(m.country || "-", 24),
+    m.placeName,
+    m.country || "-",
     m.countryCode ?? "-",
     m.placeType || "-",
   ]);
 
-  for (const line of renderTable(headers.map((h) => style(h, "bold")), rows)) {
-    printLine(line);
-  }
+  printTable(headers, rows, [6, 12, 10, 4, 6]);
 }
 
 export function printRawHuman(payload: {

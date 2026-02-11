@@ -242,6 +242,14 @@ export function colorEnabled(): boolean {
   return Boolean(process.stdout.isTTY);
 }
 
+export function getUsableTerminalWidth(fallback = 80): number {
+  const columns = process.stdout.columns;
+  if (process.stdout.isTTY && typeof columns === "number" && Number.isFinite(columns) && columns > 0) {
+    return Math.max(40, Math.trunc(columns));
+  }
+  return fallback;
+}
+
 function wrapAnsi(text: string, code: string, enabled: boolean): string {
   if (!enabled) return text;
   return `\u001B[${code}m${text}\u001B[0m`;
@@ -268,7 +276,96 @@ function padRight(input: string, width: number): string {
   return input + " ".repeat(width - len);
 }
 
-export function renderTable(headers: string[], rows: string[][]): string[] {
+type TableRenderOptions = {
+  maxWidth?: number;
+  minColWidth?: number;
+  minWidths?: number[];
+};
+
+function wrapPlainText(input: string, width: number): string[] {
+  if (width <= 1) {
+    return input.length === 0 ? [""] : input.split("").map((ch) => ch);
+  }
+
+  const chunks: string[] = [];
+  const segments = input.split("\n");
+
+  for (const segment of segments) {
+    const trimmed = segment.trim();
+    if (trimmed.length === 0) {
+      chunks.push("");
+      continue;
+    }
+
+    const words = trimmed.split(/\s+/);
+    let line = "";
+
+    for (const word of words) {
+      if (word.length > width) {
+        if (line.length > 0) {
+          chunks.push(line);
+          line = "";
+        }
+
+        for (let i = 0; i < word.length; i += width) {
+          chunks.push(word.slice(i, i + width));
+        }
+        continue;
+      }
+
+      if (line.length === 0) {
+        line = word;
+        continue;
+      }
+
+      if (line.length + 1 + word.length <= width) {
+        line += ` ${word}`;
+      } else {
+        chunks.push(line);
+        line = word;
+      }
+    }
+
+    if (line.length > 0) chunks.push(line);
+  }
+
+  return chunks.length > 0 ? chunks : [""];
+}
+
+export function wrapText(input: string, width: number): string[] {
+  const plain = stripAnsi(input);
+  if (plain.length <= width) return [input];
+  return wrapPlainText(plain, width);
+}
+
+function shrinkWidthsToFit(widths: number[], minWidths: number[], maxWidth: number): number[] {
+  const out = [...widths];
+  const separatorWidth = Math.max(0, out.length - 1) * 2;
+
+  const total = (): number => out.reduce((sum, n) => sum + n, 0) + separatorWidth;
+
+  while (total() > maxWidth) {
+    let candidate = -1;
+    let bestSlack = 0;
+
+    for (let i = 0; i < out.length; i += 1) {
+      const slack = out[i]! - (minWidths[i] ?? 1);
+      if (slack >= bestSlack) {
+        bestSlack = slack;
+        candidate = i;
+      }
+    }
+
+    if (candidate === -1 || bestSlack <= 0) break;
+    const current = out[candidate];
+    if (typeof current !== "number") break;
+    out[candidate] = current - 1;
+  }
+
+  return out;
+}
+
+export function renderTable(headers: string[], rows: string[][], opts?: TableRenderOptions): string[] {
   if (headers.length === 0) return [];
 
   const widths = headers.map((h) => stripAnsi(h).length);
@@ -279,16 +376,39 @@ export function renderTable(headers: string[], rows: string[][]): string[] {
     }
   }
 
-  const headerLine = headers
-    .map((h, i) => padRight(h, widths[i]!))
-    .join("  ");
-  const separator = widths.map((w) => "-".repeat(w)).join("  ");
+  const minBase = opts?.minColWidth ?? 4;
+  const minWidths = headers.map((_, i) => {
+    const headerWidth = stripAnsi(headers[i] ?? "").length;
+    const explicit = opts?.minWidths?.[i];
+    const bounded = typeof explicit === "number" ? Math.max(1, Math.trunc(explicit)) : minBase;
+    return Math.min(widths[i]!, Math.max(headerWidth, bounded));
+  });
 
-  const bodyLines = rows.map((row) =>
-    headers
-      .map((_, i) => padRight(row[i] ?? "", widths[i]!))
-      .join("  ")
-  );
+  const fittedWidths =
+    typeof opts?.maxWidth === "number" && Number.isFinite(opts.maxWidth)
+      ? shrinkWidthsToFit(widths, minWidths, Math.max(20, Math.trunc(opts.maxWidth)))
+      : widths;
+
+  const headerLine = headers
+    .map((h, i) => padRight(h, fittedWidths[i]!))
+    .join("  ");
+  const separator = fittedWidths.map((w) => "-".repeat(w)).join("  ");
+
+  const bodyLines: string[] = [];
+  for (const row of rows) {
+    const wrappedCells = headers.map((_, i) => wrapText(row[i] ?? "", fittedWidths[i]!));
+    const rowHeight = wrappedCells.reduce((max, lines) => Math.max(max, lines.length), 1);
+
+    for (let lineIdx = 0; lineIdx < rowHeight; lineIdx += 1) {
+      const line = headers
+        .map((_, i) => {
+          const cellLine = wrappedCells[i]![lineIdx] ?? "";
+          return padRight(cellLine, fittedWidths[i]!);
+        })
+        .join("  ");
+      bodyLines.push(line);
+    }
+  }
 
   return [headerLine, separator, ...bodyLines];
 }
