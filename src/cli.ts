@@ -15,6 +15,11 @@ import {
   printWoeidMatchesHuman,
   printUsersHuman,
 } from "./internal/human.ts";
+import {
+  collectPostMedia,
+  downloadPostMediaAssets,
+  type MediaDownloadReport,
+} from "./internal/media.ts";
 import { ConfigError, getBearerToken, parseCsv, parseMaybeInt } from "./internal/parsing.ts";
 import { searchWoeid } from "./internal/woeid.ts";
 import {
@@ -99,6 +104,31 @@ function getStringOpt(
   for (const key of keys) {
     const value = argvOpts[key];
     if (typeof value === "string" && value.trim().length > 0) return value.trim();
+  }
+  return undefined;
+}
+
+function getBooleanOpt(
+  argvOpts: Record<string, string | boolean>,
+  keys: string[]
+): boolean | undefined {
+  for (const key of keys) {
+    const value = argvOpts[key];
+    if (value === true) return true;
+    if (typeof value === "string") {
+      const normalized = value.trim().toLowerCase();
+      if (normalized === "true" || normalized === "1" || normalized === "yes" || normalized === "on") {
+        return true;
+      }
+      if (
+        normalized === "false" ||
+        normalized === "0" ||
+        normalized === "no" ||
+        normalized === "off"
+      ) {
+        return false;
+      }
+    }
   }
   return undefined;
 }
@@ -309,7 +339,7 @@ function getUsersLookupOptions(argvOpts: Record<string, string | boolean>): Requ
       ? parseCsv(argvOpts["tweet-fields"])
       : undefined;
 
-  const presetDefaults =
+  const presetDefaults: RequestFieldOptions =
     preset === "profile"
       ? {
           userFields: [
@@ -321,20 +351,23 @@ function getUsersLookupOptions(argvOpts: Record<string, string | boolean>): Requ
             "public_metrics",
             "url",
             "verified",
+            "verified_type",
             "pinned_tweet_id",
           ],
         }
-      : {};
+      : {
+          userFields: ["public_metrics", "verified", "verified_type"],
+        };
 
   return {
-    userFields: userFields ?? (presetDefaults as { userFields?: string[] }).userFields,
+    userFields: userFields ?? presetDefaults.userFields,
     expansions,
     tweetFields,
   };
 }
 
 function getPostsLookupOptions(argvOpts: Record<string, string | boolean>): RequestFieldOptions {
-  const preset = typeof argvOpts["preset"] === "string" ? argvOpts["preset"] : "minimal";
+  const preset = typeof argvOpts["preset"] === "string" ? argvOpts["preset"] : "post";
 
   const tweetFields =
     typeof argvOpts["tweet-fields"] === "string"
@@ -355,20 +388,34 @@ function getPostsLookupOptions(argvOpts: Record<string, string | boolean>): Requ
       ? parseCsv(argvOpts["place-fields"])
       : undefined;
 
-  const presetDefaults =
+  const presetDefaults: RequestFieldOptions =
     preset === "post"
       ? {
-          tweetFields: ["created_at", "public_metrics", "author_id", "conversation_id"],
-          expansions: ["author_id"],
+          tweetFields: [
+            "created_at",
+            "public_metrics",
+            "author_id",
+            "conversation_id",
+            "attachments",
+          ],
+          expansions: ["author_id", "attachments.media_keys"],
           userFields: ["username", "name", "verified"],
+          mediaFields: [
+            "media_key",
+            "type",
+            "url",
+            "preview_image_url",
+            "duration_ms",
+            "alt_text",
+          ],
         }
       : {};
 
   return {
-    tweetFields: tweetFields ?? (presetDefaults as { tweetFields?: string[] }).tweetFields,
-    expansions: expansions ?? (presetDefaults as { expansions?: string[] }).expansions,
-    userFields: userFields ?? (presetDefaults as { userFields?: string[] }).userFields,
-    mediaFields,
+    tweetFields: tweetFields ?? presetDefaults.tweetFields,
+    expansions: expansions ?? presetDefaults.expansions,
+    userFields: userFields ?? presetDefaults.userFields,
+    mediaFields: mediaFields ?? presetDefaults.mediaFields,
     pollFields,
     placeFields,
   };
@@ -475,6 +522,19 @@ function getPostsSearchOptions(
   };
 }
 
+function getPostsMediaDownloadOptions(argvOpts: Record<string, string | boolean>): {
+  downloadMedia: boolean;
+  mediaDir: string;
+} {
+  const downloadMedia =
+    getBooleanOpt(argvOpts, ["download-media", "download_media"]) ?? false;
+  const mediaDir = getStringOpt(argvOpts, ["media-dir", "media_dir"]) ?? "./xcli-media";
+  return {
+    downloadMedia,
+    mediaDir,
+  };
+}
+
 function getTrendsOptions(argvOpts: Record<string, string | boolean>): {
   maxTrends?: number;
   trendFields?: string[];
@@ -541,6 +601,57 @@ function requireAtMost100(values: string[], label: string): void {
   if (values.length > 100) {
     throw new ConfigError(`${label} accepts at most 100 values per request. Got: ${values.length}.`);
   }
+}
+
+function printMediaDownloadReport(report: MediaDownloadReport, mode: OutputMode): void {
+  const line = `Media download: downloaded ${report.downloaded}/${report.attempted} file(s) to ${report.outputDir}`;
+
+  if (mode === "human") {
+    if (report.downloaded > 0) {
+      printLine(style(line, "green"));
+    } else {
+      printLine(style(line, "yellow"));
+    }
+  } else {
+    printError(line);
+  }
+
+  if (report.errors.length > 0) {
+    const sample = report.errors.slice(0, 3);
+    for (const err of sample) {
+      if (mode === "human") printLine(style(`- ${err}`, "yellow"));
+      else printError(`- ${err}`);
+    }
+    if (report.errors.length > sample.length) {
+      const rem = report.errors.length - sample.length;
+      if (mode === "human") printLine(style(`... and ${rem} more download error(s).`, "yellow"));
+      else printError(`... and ${rem} more download error(s).`);
+    }
+  }
+}
+
+async function maybeDownloadPostMedia(
+  response: unknown,
+  argvOpts: Record<string, string | boolean>,
+  g: GlobalOptions
+): Promise<void> {
+  const downloadOpts = getPostsMediaDownloadOptions(argvOpts);
+  if (!downloadOpts.downloadMedia) return;
+
+  const { downloadable } = collectPostMedia(response);
+  if (downloadable.length === 0) {
+    const hint =
+      "No downloadable media URLs found. Include --expansions attachments.media_keys and --media-fields media_key,type,url,preview_image_url.";
+    if (g.outputMode === "human") {
+      printLine(style(hint, "yellow"));
+    } else {
+      printError(hint);
+    }
+    return;
+  }
+
+  const report = await downloadPostMediaAssets(downloadable, downloadOpts.mediaDir);
+  printMediaDownloadReport(report, g.outputMode);
 }
 
 async function runWoeidSearch(
@@ -649,6 +760,7 @@ async function runPostsSearch(
       ? await client.posts.searchAll(query, options)
       : await client.posts.searchRecent(query, options);
   printData(data, g.outputMode, "posts");
+  await maybeDownloadPostMedia(data, argvOpts, g);
   return 0;
 }
 
@@ -919,6 +1031,7 @@ async function runPostsCommand(
 
         const data = await client.posts.getById(parsed.value, fields);
         printData(data, g.outputMode, "posts");
+        await maybeDownloadPostMedia(data, argvOpts, g);
         return 0;
       }
 
@@ -958,6 +1071,7 @@ async function runPostsCommand(
 
         const data = await client.posts.getByIds(ids, fields);
         printData(data, g.outputMode, "posts");
+        await maybeDownloadPostMedia(data, argvOpts, g);
         return 0;
       }
     }
@@ -998,6 +1112,7 @@ async function runPostsCommand(
 
     const data = await client.posts.getByIds(ids, fields);
     printData(data, g.outputMode, "posts");
+    await maybeDownloadPostMedia(data, argvOpts, g);
     return 0;
   } catch (err: unknown) {
     if (err instanceof ConfigError) {

@@ -9,6 +9,37 @@ import {
   toArray,
   truncate,
 } from "./util.ts";
+import {
+  collectPostMedia,
+  formatPostMediaDownloadable,
+  formatPostMediaSummary,
+} from "./media.ts";
+
+function pickField(obj: Record<string, unknown>, keys: string[]): unknown {
+  for (const key of keys) {
+    const value = obj[key];
+    if (value !== undefined) return value;
+  }
+  return undefined;
+}
+
+function pickObjectField(obj: Record<string, unknown>, keys: string[]): Record<string, unknown> | undefined {
+  for (const key of keys) {
+    const value = getObject(obj[key]);
+    if (value) return value;
+  }
+  return undefined;
+}
+
+function pickStringField(obj: Record<string, unknown>, keys: string[]): string | undefined {
+  const value = pickField(obj, keys);
+  return typeof value === "string" ? value : undefined;
+}
+
+function pickNumberField(obj: Record<string, unknown>, keys: string[]): number | undefined {
+  const value = pickField(obj, keys);
+  return typeof value === "number" ? value : undefined;
+}
 
 function printWarnings(response: Record<string, unknown>): void {
   const errors = toArray(response["errors"]);
@@ -22,8 +53,8 @@ function printMeta(response: Record<string, unknown>): void {
   const meta = getObject(response["meta"]);
   if (!meta) return;
 
-  const resultCount = typeof meta["result_count"] === "number" ? meta["result_count"] : undefined;
-  const nextToken = typeof meta["next_token"] === "string" ? meta["next_token"] : undefined;
+  const resultCount = pickNumberField(meta, ["result_count", "resultCount"]);
+  const nextToken = pickStringField(meta, ["next_token", "nextToken"]);
 
   if (resultCount === undefined && nextToken === undefined) return;
 
@@ -54,17 +85,22 @@ export function printUsersHuman(response: unknown): void {
 
   const headers = ["ID", "Username", "Name", "Verified", "Followers", "Posts"];
   const rows = users.map((user) => {
-    const metrics = getObject(user["public_metrics"]);
-    const username = typeof user["username"] === "string" ? `@${user["username"]}` : "-";
-    const verified = user["verified"] === true ? style("yes", "green") : "no";
+    const metrics = pickObjectField(user, ["public_metrics", "publicMetrics"]);
+    const usernameRaw = pickStringField(user, ["username"]);
+    const username = usernameRaw ? `@${usernameRaw}` : "-";
+    const verifiedType = pickStringField(user, ["verified_type", "verifiedType"]);
+    const isVerified =
+      pickField(user, ["verified"]) === true ||
+      (typeof verifiedType === "string" && verifiedType.length > 0 && verifiedType !== "none");
+    const verified = isVerified ? style("yes", "green") : "no";
 
     return [
       String(user["id"] ?? "-"),
       truncate(username, 24),
       truncate(String(user["name"] ?? "-"), 28),
       verified,
-      formatNumber(metrics?.["followers_count"]),
-      formatNumber(metrics?.["tweet_count"]),
+      formatNumber(pickField(metrics ?? {}, ["followers_count", "followersCount"])),
+      formatNumber(pickField(metrics ?? {}, ["tweet_count", "tweetCount"])),
     ];
   });
 
@@ -102,24 +138,43 @@ export function printPostsHuman(response: unknown): void {
   }
 
   printLine(style(`Posts (${posts.length})`, "cyan"));
+  const { summaries } = collectPostMedia(response);
+  const includes = getObject(obj["includes"]);
+  const includeUsers = toArray(includes?.["users"])
+    .map(getObject)
+    .filter((x): x is Record<string, unknown> => Boolean(x));
+  const userById = new Map<string, string>();
+  for (const user of includeUsers) {
+    const id = pickStringField(user, ["id"]);
+    const username = pickStringField(user, ["username"]);
+    if (id && username) userById.set(id, `@${username}`);
+  }
 
-  const headers = ["ID", "Author", "Created", "Likes", "Replies", "Reposts", "Text"];
+  const headers = ["ID", "Author", "Created", "Likes", "Replies", "Reposts", "Media", "DL", "Text"];
   const rows = posts.map((post) => {
-    const metrics = getObject(post["public_metrics"]);
+    const metrics = pickObjectField(post, ["public_metrics", "publicMetrics"]);
     const text = typeof post["text"] === "string" ? compactWhitespace(post["text"]) : "-";
-    const repostCount =
-      typeof metrics?.["retweet_count"] === "number"
-        ? metrics["retweet_count"]
-        : metrics?.["repost_count"];
+    const repostCount = pickField(metrics ?? {}, [
+      "retweet_count",
+      "retweetCount",
+      "repost_count",
+      "repostCount",
+    ]);
+    const postId = pickStringField(post, ["id"]) ?? "";
+    const authorId = pickStringField(post, ["author_id", "authorId"]);
+    const author = authorId ? userById.get(authorId) ?? authorId : "-";
+    const mediaSummary = summaries.get(postId);
 
     return [
       String(post["id"] ?? "-"),
-      String(post["author_id"] ?? "-"),
-      formatDateShort(post["created_at"]),
-      formatNumber(metrics?.["like_count"]),
-      formatNumber(metrics?.["reply_count"]),
+      truncate(author, 22),
+      formatDateShort(pickField(post, ["created_at", "createdAt"])),
+      formatNumber(pickField(metrics ?? {}, ["like_count", "likeCount"])),
+      formatNumber(pickField(metrics ?? {}, ["reply_count", "replyCount"])),
       formatNumber(repostCount),
-      truncate(text, 72),
+      formatPostMediaSummary(mediaSummary),
+      formatPostMediaDownloadable(mediaSummary),
+      truncate(text, 48),
     ];
   });
 

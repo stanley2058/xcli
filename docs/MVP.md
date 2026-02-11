@@ -26,10 +26,12 @@ This workspace contains a Bun + TypeScript CLI that wraps the official X TypeScr
   - `xcli fields users|posts|trends` (quick references and doc links)
 - Output:
   - Human-readable output by default (tables)
+  - Post media summary columns in human output (`Media`, `DL`)
   - Color and styles, respecting TTY, `NO_COLOR`, and `FORCE_COLOR`
   - `--json` for compact JSON
   - `--json-pretty` for indented JSON
   - `--raw` to print status + headers + body (useful for debugging rate limits)
+  - Optional media asset download for posts via `--download-media` (`--media-dir` to control output path)
 - Help:
   - `--help` at root and on subcommands, e.g. `xcli users --help`
   - `--help-all` for verbose help

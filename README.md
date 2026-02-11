@@ -34,6 +34,9 @@ X_API_BEARER_TOKEN=... bun run xcli -- users https://x.com/XDevelopers
 X_API_BEARER_TOKEN=... bun run xcli -- posts 1228393702244134912
 X_API_BEARER_TOKEN=... bun run xcli -- posts https://x.com/XDevelopers/status/1228393702244134912
 
+# Download post media files (when media URLs are available)
+X_API_BEARER_TOKEN=... bun run xcli -- posts 1228393702244134912 --expansions attachments.media_keys --media-fields media_key,type,url,preview_image_url --download-media
+
 # Post search (recent or full archive)
 X_API_BEARER_TOKEN=... bun run xcli -- posts search recent --query "from:XDevelopers -is:retweet"
 X_API_BEARER_TOKEN=... bun run xcli -- posts search all --query "lang:en #ai -is:retweet"
@@ -75,6 +78,7 @@ Notes:
 
 - Default output is human-readable tables.
 - Color output honors TTY, `NO_COLOR`, and `FORCE_COLOR`.
+- Post tables include short media fields: `Media` (e.g. `img2,vid1`) and `DL` (downloadable/total).
 - `trends search` uses a public WOEID index, fetched on demand and cached locally.
 - Optional: set `XCLI_WOEID_CACHE_PATH` to override the default cache file path.
 
