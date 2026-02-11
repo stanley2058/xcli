@@ -33,6 +33,10 @@ X_API_BEARER_TOKEN=... bun run xcli -- users search --query "python developer"
 
 # Trends by WOEID
 X_API_BEARER_TOKEN=... bun run xcli -- trends 1
+X_API_BEARER_TOKEN=... bun run xcli -- trends "new york"
+
+# WOEID lookup (fuzzy)
+bun run xcli -- trends search "new york"
 
 # Explicit subcommands still supported
 X_API_BEARER_TOKEN=... bun run xcli -- users by-username XDevelopers
@@ -50,5 +54,7 @@ Notes:
 
 - Default output is human-readable tables.
 - Color output honors TTY, `NO_COLOR`, and `FORCE_COLOR`.
+- `trends search` uses a public WOEID index, fetched on demand and cached locally.
+- Optional: set `XCLI_WOEID_CACHE_PATH` to override the default cache file path.
 
 This project was created using `bun init` in bun v1.3.8. [Bun](https://bun.com) is a fast all-in-one JavaScript runtime.

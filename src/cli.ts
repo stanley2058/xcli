@@ -12,9 +12,11 @@ import {
   printPostsHuman,
   printRawHuman,
   printTrendsHuman,
+  printWoeidMatchesHuman,
   printUsersHuman,
 } from "./internal/human.ts";
 import { ConfigError, getBearerToken, parseCsv, parseMaybeInt } from "./internal/parsing.ts";
+import { searchWoeid } from "./internal/woeid.ts";
 import {
   dedupe,
   isNumericId,
@@ -541,6 +543,53 @@ function requireAtMost100(values: string[], label: string): void {
   }
 }
 
+async function runWoeidSearch(
+  args: string[],
+  argvOpts: Record<string, string | boolean>,
+  g: GlobalOptions
+): Promise<number> {
+  const query = parseSearchQuery(argvOpts, args);
+  const limit = parseBoundedInt(getStringOpt(argvOpts, ["limit"]), "--limit", 1, 100) ?? 10;
+  const matches = await searchWoeid(query, { limit });
+
+  if (g.outputMode === "human") {
+    printWoeidMatchesHuman(query, matches);
+    if (matches.length > 0) {
+      const best = matches[0]!;
+      printLine("");
+      printLine(style(`Try: xcli trends ${best.woeid}`, "dim"));
+    }
+    return matches.length > 0 ? 0 : 1;
+  }
+
+  jsonPrint(
+    {
+      query,
+      count: matches.length,
+      matches,
+    },
+    { pretty: jsonPretty(g.outputMode) }
+  );
+  return matches.length > 0 ? 0 : 1;
+}
+
+async function resolveWoeidFromQuery(
+  query: string
+): Promise<{ resolved: number; displayName: string; hadMultiple: boolean }> {
+  const matches = await searchWoeid(query, { limit: 5 });
+  if (matches.length === 0) {
+    throw new ConfigError(`No WOEID match found for '${query}'. Try: xcli trends search ${query}`);
+  }
+
+  const best = matches[0]!;
+  const label = best.country ? `${best.placeName}, ${best.country}` : best.placeName;
+  return {
+    resolved: best.woeid,
+    displayName: label,
+    hadMultiple: matches.length > 1,
+  };
+}
+
 async function runUsersSearch(
   clientFactory: () => Client,
   queryArgs: string[],
@@ -978,20 +1027,38 @@ async function runTrendsCommand(
 
   try {
     const first = args[0]!;
-    const woeidRaw = TREND_SUBCOMMANDS.has(first) ? args[1] : first;
 
+    if (first === "search") {
+      return await runWoeidSearch(args.slice(1), argvOpts, g);
+    }
+
+    const woeidRaw = TREND_SUBCOMMANDS.has(first) ? args[1] : first;
     if (!woeidRaw) {
-      printError("Missing required <woeid>.");
+      printError("Missing required <woeid|location>.");
       return 1;
     }
 
-    if (!isNumericId(woeidRaw)) {
-      throw new ConfigError("<woeid> must be a positive integer.");
-    }
+    let woeid: number;
+    if (isNumericId(woeidRaw)) {
+      woeid = Number(woeidRaw);
+      if (!Number.isInteger(woeid) || woeid <= 0 || woeid > 2147483647) {
+        throw new ConfigError("<woeid> must be an integer in the range 1..2147483647.");
+      }
+    } else {
+      const query = parseSearchQuery(
+        argvOpts,
+        TREND_SUBCOMMANDS.has(first) ? args.slice(1) : args
+      );
+      const resolved = await resolveWoeidFromQuery(query);
+      woeid = resolved.resolved;
 
-    const woeid = Number(woeidRaw);
-    if (!Number.isInteger(woeid) || woeid <= 0 || woeid > 2147483647) {
-      throw new ConfigError("<woeid> must be an integer in the range 1..2147483647.");
+      if (g.outputMode === "human") {
+        printLine(style(`Resolved '${query}' -> ${woeid} (${resolved.displayName})`, "dim"));
+        if (resolved.hadMultiple) {
+          printLine(style(`Tip: use 'xcli trends search ${query}' to inspect alternatives.`, "dim"));
+        }
+        printLine("");
+      }
     }
 
     const options = getTrendsOptions(argvOpts);

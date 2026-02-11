@@ -13,15 +13,16 @@ This workspace contains a Bun + TypeScript CLI that wraps the official X TypeScr
     - `xcli users by-id <id>`
     - `xcli users by-username <username|@username>`
     - `xcli users by-ids <id...>`
-      - `xcli users by-usernames <username...>`
-      - `xcli posts by-id <id|url>`
-      - `xcli posts by-ids <id...>`
+    - `xcli users by-usernames <username...>`
+    - `xcli posts by-id <id|url>`
+    - `xcli posts by-ids <id...>`
   - Search:
     - `xcli users search <query...>`
     - `xcli posts search [recent|all] <query...>`
   - Trends:
-    - `xcli trends <woeid>`
-    - `xcli trends by-woeid <woeid>`
+    - `xcli trends <woeid|location query>`
+    - `xcli trends by-woeid <woeid|location query>`
+    - `xcli trends search <location query>` (fuzzy WOEID lookup)
   - `xcli fields users|posts|trends` (quick references and doc links)
 - Output:
   - Human-readable output by default (tables)
@@ -39,7 +40,7 @@ This workspace contains a Bun + TypeScript CLI that wraps the official X TypeScr
 - Any write actions (create/delete posts, likes, follows, bookmarks, etc.)
 - Streaming endpoints
 - Pagination helpers (auto-fetching all pages); only single-page lookups are supported
-- Caching, local storage, or persistence of results
+- Caching, local storage, or persistence of API results (except local cache for WOEID index lookup)
 - Config files (no `~/.config/xcli/...`), keychain integration, or interactive prompts
 - Automatic rate-limit backoff / retry scheduling (beyond the SDK's basic retry settings)
 - NDJSON and custom export formats (CSV, markdown, etc.)

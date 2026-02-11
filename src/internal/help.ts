@@ -11,7 +11,7 @@ export function printRootHelp(opts: HelpOpts): void {
   printLine("Commands:");
   printLine("  users         Lookup users + user search");
   printLine("  posts         Lookup posts + post search");
-  printLine("  trends        Lookup trends by WOEID");
+  printLine("  trends        Lookup trends by WOEID or location");
   printLine("  fields        Show field/expansion references");
   printLine("");
   printLine("Quick examples:");
@@ -21,6 +21,8 @@ export function printRootHelp(opts: HelpOpts): void {
   printLine("  xcli posts search recent --query 'from:XDevelopers -is:retweet'");
   printLine("  xcli users search --query 'python developer'");
   printLine("  xcli trends 1");
+  printLine("  xcli trends new york");
+  printLine("  xcli trends search new york");
   printLine("  xcli posts 1228393702244134912 1227640996038684673");
   printLine("  xcli users by-username XDevelopers   # explicit mode");
   printLine("");
@@ -146,12 +148,15 @@ export function printTrendsHelp(opts: HelpOpts): void {
   printLine("xcli trends - trends by WOEID");
   printLine("");
   printLine("Usage:");
-  printLine("  xcli trends <woeid>");
-  printLine("  xcli trends by-woeid <woeid>");
+  printLine("  xcli trends <woeid|location query>");
+  printLine("  xcli trends by-woeid <woeid|location query>");
+  printLine("  xcli trends search <location query>");
   printLine("");
   printLine("Examples:");
   printLine("  xcli trends 1");
   printLine("  xcli trends 23424977");
+  printLine("  xcli trends new york");
+  printLine("  xcli trends search new york");
 
   if (!opts.all) {
     printLine("");
@@ -163,6 +168,8 @@ export function printTrendsHelp(opts: HelpOpts): void {
   printLine("Options:");
   printLine("  --max-trends <n>            Max trends to return (1-50)");
   printLine("  --trend-fields <csv>        Maps to trend.fields");
+  printLine("  --query <text>              Query text for trends search/resolve");
+  printLine("  --limit <n>                 WOEID search result limit (1-100)");
   printLine("  --json                      Output compact JSON");
   printLine("  --json-pretty               Output pretty JSON");
   printLine("  --raw                       Raw HTTP output (debug)");

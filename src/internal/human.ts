@@ -150,9 +150,26 @@ export function printTrendsHuman(response: unknown): void {
 
   const headers = ["Name", "Post Count"];
   const rows = trends.map((trend) => {
+    const name =
+      typeof trend["trend_name"] === "string"
+        ? trend["trend_name"]
+        : typeof trend["trendName"] === "string"
+          ? trend["trendName"]
+          : typeof trend["name"] === "string"
+            ? trend["name"]
+            : "-";
+
+    const count =
+      trend["tweet_count"] ??
+      trend["tweetCount"] ??
+      trend["tweet_volume"] ??
+      trend["tweetVolume"] ??
+      trend["post_count"] ??
+      trend["postCount"];
+
     return [
-      truncate(String(trend["trend_name"] ?? "-"), 64),
-      formatNumber(trend["tweet_count"]),
+      truncate(String(name), 64),
+      formatNumber(count),
     ];
   });
 
@@ -161,6 +178,37 @@ export function printTrendsHuman(response: unknown): void {
   }
 
   printWarnings(obj);
+}
+
+export function printWoeidMatchesHuman(
+  query: string,
+  matches: Array<{
+    woeid: number;
+    placeName: string;
+    country: string;
+    countryCode?: string;
+    placeType: string;
+  }>
+): void {
+  if (matches.length === 0) {
+    printLine(style(`No WOEID matches for '${query}'.`, "yellow"));
+    return;
+  }
+
+  printLine(style(`WOEID matches for '${query}'`, "cyan"));
+
+  const headers = ["WOEID", "Place", "Country", "Code", "Type"];
+  const rows = matches.map((m) => [
+    String(m.woeid),
+    truncate(m.placeName, 32),
+    truncate(m.country || "-", 24),
+    m.countryCode ?? "-",
+    m.placeType || "-",
+  ]);
+
+  for (const line of renderTable(headers.map((h) => style(h, "bold")), rows)) {
+    printLine(line);
+  }
 }
 
 export function printRawHuman(payload: {
