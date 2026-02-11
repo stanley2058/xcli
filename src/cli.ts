@@ -5,12 +5,19 @@ import {
   printFieldsHelp,
   printPostsHelp,
   printRootHelp,
+  printTrendsHelp,
   printUsersHelp,
 } from "./internal/help.ts";
-import { printPostsHuman, printRawHuman, printUsersHuman } from "./internal/human.ts";
+import {
+  printPostsHuman,
+  printRawHuman,
+  printTrendsHuman,
+  printUsersHuman,
+} from "./internal/human.ts";
 import { ConfigError, getBearerToken, parseCsv, parseMaybeInt } from "./internal/parsing.ts";
 import {
   dedupe,
+  isNumericId,
   jsonPrint,
   normalizeUsername,
   parsePostInput,
@@ -41,10 +48,14 @@ type RequestFieldOptions = {
   mediaFields?: string[];
   pollFields?: string[];
   placeFields?: string[];
+  trendFields?: string[];
 };
+
+type PostSearchMode = "recent" | "all";
 
 const USER_SUBCOMMANDS = new Set(["by-id", "by-ids", "by-username", "by-usernames"]);
 const POST_SUBCOMMANDS = new Set(["by-id", "by-ids"]);
+const TREND_SUBCOMMANDS = new Set(["by-woeid"]);
 
 function getGlobalOptions(argvOpts: Record<string, string | boolean>): GlobalOptions {
   const help = argvOpts["help"] === true || argvOpts["h"] === true;
@@ -77,6 +88,51 @@ function getGlobalOptions(argvOpts: Record<string, string | boolean>): GlobalOpt
 
 function jsonPretty(mode: OutputMode): boolean {
   return mode === "json-pretty";
+}
+
+function getStringOpt(
+  argvOpts: Record<string, string | boolean>,
+  keys: string[]
+): string | undefined {
+  for (const key of keys) {
+    const value = argvOpts[key];
+    if (typeof value === "string" && value.trim().length > 0) return value.trim();
+  }
+  return undefined;
+}
+
+function parseBoundedInt(
+  value: string | undefined,
+  label: string,
+  min: number,
+  max: number
+): number | undefined {
+  if (value === undefined) return undefined;
+  const parsed = parseMaybeInt(value);
+  if (parsed === undefined) {
+    throw new ConfigError(`${label} must be an integer.`);
+  }
+  if (parsed < min || parsed > max) {
+    throw new ConfigError(`${label} must be between ${min} and ${max}. Got: ${parsed}.`);
+  }
+  return parsed;
+}
+
+function parseSearchQuery(
+  argvOpts: Record<string, string | boolean>,
+  queryArgs: string[]
+): string {
+  const queryOpt = getStringOpt(argvOpts, ["query"]);
+
+  if (queryOpt && queryArgs.length > 0) {
+    throw new ConfigError("Provide query either as --query or as positional text, not both.");
+  }
+
+  const query = queryOpt ?? queryArgs.join(" ").trim();
+  if (query.length === 0) {
+    throw new ConfigError("Missing required search query.");
+  }
+  return query;
 }
 
 function createXClient(opts: GlobalOptions): Client {
@@ -132,10 +188,11 @@ async function parseRawResponse(res: Response): Promise<{
   }
 }
 
-function printData(data: unknown, mode: OutputMode, topic: "users" | "posts"): void {
+function printData(data: unknown, mode: OutputMode, topic: "users" | "posts" | "trends"): void {
   if (mode === "human") {
     if (topic === "users") printUsersHuman(data);
-    else printPostsHuman(data);
+    else if (topic === "posts") printPostsHuman(data);
+    else printTrendsHuman(data);
     return;
   }
 
@@ -200,6 +257,15 @@ function printApiError(err: ApiError, mode: OutputMode): void {
   const title = `API error ${err.status} ${err.statusText}`.trim();
   printError(style(title, "red"));
   printError(err.message);
+
+  if (err.status === 401 || err.status === 403) {
+    printError(
+      style(
+        "Auth note: some endpoints may require user-context OAuth tokens for your account tier.",
+        "yellow"
+      )
+    );
+  }
 
   if (err.status === 429) {
     const reset = err.headers.get("x-rate-limit-reset");
@@ -306,6 +372,131 @@ function getPostsLookupOptions(argvOpts: Record<string, string | boolean>): Requ
   };
 }
 
+function getUsersSearchOptions(argvOpts: Record<string, string | boolean>): {
+  maxResults?: number;
+  nextToken?: string;
+  userFields?: string[];
+  expansions?: string[];
+  tweetFields?: string[];
+} {
+  const fields = getUsersLookupOptions(argvOpts);
+
+  const maxResults = parseBoundedInt(
+    getStringOpt(argvOpts, ["max-results", "max_results"]),
+    "--max-results",
+    1,
+    1000
+  );
+
+  const nextToken = getStringOpt(argvOpts, ["next-token", "next_token"]);
+
+  return {
+    maxResults,
+    nextToken,
+    userFields: fields.userFields,
+    expansions: fields.expansions,
+    tweetFields: fields.tweetFields,
+  };
+}
+
+function getPostsSearchOptions(
+  argvOpts: Record<string, string | boolean>,
+  mode: PostSearchMode
+): {
+  startTime?: string;
+  endTime?: string;
+  sinceId?: string;
+  untilId?: string;
+  maxResults?: number;
+  nextToken?: string;
+  paginationToken?: string;
+  sortOrder?: "recency" | "relevancy";
+  tweetFields?: string[];
+  expansions?: string[];
+  userFields?: string[];
+  mediaFields?: string[];
+  pollFields?: string[];
+  placeFields?: string[];
+} {
+  const fields = getPostsLookupOptions(argvOpts);
+
+  const maxResults = parseBoundedInt(
+    getStringOpt(argvOpts, ["max-results", "max_results"]),
+    "--max-results",
+    10,
+    mode === "recent" ? 100 : 500
+  );
+
+  const nextToken = getStringOpt(argvOpts, ["next-token", "next_token"]);
+  const paginationToken = getStringOpt(argvOpts, ["pagination-token", "pagination_token"]);
+
+  if (nextToken && paginationToken) {
+    throw new ConfigError("Use either --next-token or --pagination-token, not both.");
+  }
+
+  const sinceId = getStringOpt(argvOpts, ["since-id", "since_id"]);
+  if (sinceId && !isNumericId(sinceId)) {
+    throw new ConfigError("--since-id must be a numeric post ID.");
+  }
+
+  const untilId = getStringOpt(argvOpts, ["until-id", "until_id"]);
+  if (untilId && !isNumericId(untilId)) {
+    throw new ConfigError("--until-id must be a numeric post ID.");
+  }
+
+  const sortOrderRaw = getStringOpt(argvOpts, ["sort-order", "sort_order"]);
+  const sortOrder =
+    sortOrderRaw === undefined
+      ? undefined
+      : sortOrderRaw === "recency" || sortOrderRaw === "relevancy"
+        ? sortOrderRaw
+        : undefined;
+  if (sortOrderRaw !== undefined && sortOrder === undefined) {
+    throw new ConfigError("--sort-order must be one of: recency, relevancy.");
+  }
+
+  return {
+    startTime: getStringOpt(argvOpts, ["start-time", "start_time"]),
+    endTime: getStringOpt(argvOpts, ["end-time", "end_time"]),
+    sinceId,
+    untilId,
+    maxResults,
+    nextToken,
+    paginationToken,
+    sortOrder,
+    tweetFields: fields.tweetFields,
+    expansions: fields.expansions,
+    userFields: fields.userFields,
+    mediaFields: fields.mediaFields,
+    pollFields: fields.pollFields,
+    placeFields: fields.placeFields,
+  };
+}
+
+function getTrendsOptions(argvOpts: Record<string, string | boolean>): {
+  maxTrends?: number;
+  trendFields?: string[];
+} {
+  const maxTrends = parseBoundedInt(
+    getStringOpt(argvOpts, ["max-trends", "max_trends"]),
+    "--max-trends",
+    1,
+    50
+  );
+
+  const trendFields =
+    typeof argvOpts["trend-fields"] === "string"
+      ? parseCsv(argvOpts["trend-fields"])
+      : typeof argvOpts["trend.fields"] === "string"
+        ? parseCsv(argvOpts["trend.fields"])
+        : undefined;
+
+  return {
+    maxTrends,
+    trendFields,
+  };
+}
+
 function mergeLookupResponses(responses: unknown[]): unknown {
   if (responses.length === 1) return responses[0];
 
@@ -350,6 +541,68 @@ function requireAtMost100(values: string[], label: string): void {
   }
 }
 
+async function runUsersSearch(
+  clientFactory: () => Client,
+  queryArgs: string[],
+  argvOpts: Record<string, string | boolean>,
+  g: GlobalOptions
+): Promise<number> {
+  const query = parseSearchQuery(argvOpts, queryArgs);
+  const options = getUsersSearchOptions(argvOpts);
+  const client = clientFactory();
+
+  if (g.raw) {
+    const res = await client.users.search(query, {
+      ...options,
+      requestOptions: { raw: true },
+    });
+    printRawData(await parseRawResponse(res), g.outputMode);
+    return 0;
+  }
+
+  const data = await client.users.search(query, options);
+  printData(data, g.outputMode, "users");
+  return 0;
+}
+
+async function runPostsSearch(
+  clientFactory: () => Client,
+  args: string[],
+  argvOpts: Record<string, string | boolean>,
+  g: GlobalOptions
+): Promise<number> {
+  const candidate = args[0];
+  const mode: PostSearchMode = candidate === "all" ? "all" : "recent";
+  const queryArgs = candidate === "recent" || candidate === "all" ? args.slice(1) : args;
+
+  const query = parseSearchQuery(argvOpts, queryArgs);
+  const options = getPostsSearchOptions(argvOpts, mode);
+  const client = clientFactory();
+
+  if (g.raw) {
+    const res =
+      mode === "all"
+        ? await client.posts.searchAll(query, {
+            ...options,
+            requestOptions: { raw: true },
+          })
+        : await client.posts.searchRecent(query, {
+            ...options,
+            requestOptions: { raw: true },
+          });
+
+    printRawData(await parseRawResponse(res), g.outputMode);
+    return 0;
+  }
+
+  const data =
+    mode === "all"
+      ? await client.posts.searchAll(query, options)
+      : await client.posts.searchRecent(query, options);
+  printData(data, g.outputMode, "posts");
+  return 0;
+}
+
 async function runUsersCommand(
   clientFactory: () => Client,
   args: string[],
@@ -365,6 +618,11 @@ async function runUsersCommand(
 
   try {
     const first = args[0]!;
+
+    if (first === "search") {
+      return await runUsersSearch(clientFactory, args.slice(1), argvOpts, g);
+    }
+
     const explicit = USER_SUBCOMMANDS.has(first);
 
     if (explicit) {
@@ -384,12 +642,12 @@ async function runUsersCommand(
           const res = await client.users.getById(id, {
             ...fields,
             requestOptions: { raw: true },
-          } as any);
-          printRawData(await parseRawResponse(res as unknown as Response), g.outputMode);
+          });
+          printRawData(await parseRawResponse(res), g.outputMode);
           return 0;
         }
 
-        const data = await client.users.getById(id, fields as any);
+        const data = await client.users.getById(id, fields);
         printData(data, g.outputMode, "users");
         return 0;
       }
@@ -407,12 +665,12 @@ async function runUsersCommand(
           const res = await client.users.getByUsername(normalizeUsername(username), {
             ...fields,
             requestOptions: { raw: true },
-          } as any);
-          printRawData(await parseRawResponse(res as unknown as Response), g.outputMode);
+          });
+          printRawData(await parseRawResponse(res), g.outputMode);
           return 0;
         }
 
-        const data = await client.users.getByUsername(normalizeUsername(username), fields as any);
+        const data = await client.users.getByUsername(normalizeUsername(username), fields);
         printData(data, g.outputMode, "users");
         return 0;
       }
@@ -432,12 +690,12 @@ async function runUsersCommand(
           const res = await client.users.getByIds(ids, {
             ...fields,
             requestOptions: { raw: true },
-          } as any);
-          printRawData(await parseRawResponse(res as unknown as Response), g.outputMode);
+          });
+          printRawData(await parseRawResponse(res), g.outputMode);
           return 0;
         }
 
-        const data = await client.users.getByIds(ids, fields as any);
+        const data = await client.users.getByIds(ids, fields);
         printData(data, g.outputMode, "users");
         return 0;
       }
@@ -457,12 +715,12 @@ async function runUsersCommand(
           const res = await client.users.getByUsernames(usernames, {
             ...fields,
             requestOptions: { raw: true },
-          } as any);
-          printRawData(await parseRawResponse(res as unknown as Response), g.outputMode);
+          });
+          printRawData(await parseRawResponse(res), g.outputMode);
           return 0;
         }
 
-        const data = await client.users.getByUsernames(usernames, fields as any);
+        const data = await client.users.getByUsernames(usernames, fields);
         printData(data, g.outputMode, "users");
         return 0;
       }
@@ -513,16 +771,16 @@ async function runUsersCommand(
         const res = await client.users.getByIds(ids, {
           ...fields,
           requestOptions: { raw: true },
-        } as any);
-        responses.push({ label: `users.getByIds (${ids.length})`, ...(await parseRawResponse(res as unknown as Response)) });
+        });
+        responses.push({ label: `users.getByIds (${ids.length})`, ...(await parseRawResponse(res)) });
       }
 
       if (usernames.length > 0) {
         const res = await client.users.getByUsernames(usernames, {
           ...fields,
           requestOptions: { raw: true },
-        } as any);
-        responses.push({ label: `users.getByUsernames (${usernames.length})`, ...(await parseRawResponse(res as unknown as Response)) });
+        });
+        responses.push({ label: `users.getByUsernames (${usernames.length})`, ...(await parseRawResponse(res)) });
       }
 
       if (responses.length === 1) {
@@ -537,10 +795,10 @@ async function runUsersCommand(
 
     const responses: unknown[] = [];
     if (ids.length > 0) {
-      responses.push(await client.users.getByIds(ids, fields as any));
+      responses.push(await client.users.getByIds(ids, fields));
     }
     if (usernames.length > 0) {
-      responses.push(await client.users.getByUsernames(usernames, fields as any));
+      responses.push(await client.users.getByUsernames(usernames, fields));
     }
 
     printData(mergeLookupResponses(responses), g.outputMode, "users");
@@ -575,6 +833,11 @@ async function runPostsCommand(
 
   try {
     const first = args[0]!;
+
+    if (first === "search") {
+      return await runPostsSearch(clientFactory, args.slice(1), argvOpts, g);
+    }
+
     const explicit = POST_SUBCOMMANDS.has(first);
 
     if (explicit) {
@@ -600,12 +863,12 @@ async function runPostsCommand(
           const res = await client.posts.getById(parsed.value, {
             ...fields,
             requestOptions: { raw: true },
-          } as any);
-          printRawData(await parseRawResponse(res as unknown as Response), g.outputMode);
+          });
+          printRawData(await parseRawResponse(res), g.outputMode);
           return 0;
         }
 
-        const data = await client.posts.getById(parsed.value, fields as any);
+        const data = await client.posts.getById(parsed.value, fields);
         printData(data, g.outputMode, "posts");
         return 0;
       }
@@ -639,12 +902,12 @@ async function runPostsCommand(
           const res = await client.posts.getByIds(ids, {
             ...fields,
             requestOptions: { raw: true },
-          } as any);
-          printRawData(await parseRawResponse(res as unknown as Response), g.outputMode);
+          });
+          printRawData(await parseRawResponse(res), g.outputMode);
           return 0;
         }
 
-        const data = await client.posts.getByIds(ids, fields as any);
+        const data = await client.posts.getByIds(ids, fields);
         printData(data, g.outputMode, "posts");
         return 0;
       }
@@ -679,13 +942,72 @@ async function runPostsCommand(
       const res = await client.posts.getByIds(ids, {
         ...fields,
         requestOptions: { raw: true },
-      } as any);
-      printRawData(await parseRawResponse(res as unknown as Response), g.outputMode);
+      });
+      printRawData(await parseRawResponse(res), g.outputMode);
       return 0;
     }
 
-    const data = await client.posts.getByIds(ids, fields as any);
+    const data = await client.posts.getByIds(ids, fields);
     printData(data, g.outputMode, "posts");
+    return 0;
+  } catch (err: unknown) {
+    if (err instanceof ConfigError) {
+      printError(err.message);
+      return 1;
+    }
+    if (err instanceof ApiError) {
+      printApiError(err, g.outputMode);
+      return 2;
+    }
+
+    printError(err instanceof Error ? err.message : String(err));
+    return 2;
+  }
+}
+
+async function runTrendsCommand(
+  clientFactory: () => Client,
+  args: string[],
+  argvOpts: Record<string, string | boolean>,
+  g: GlobalOptions
+): Promise<number> {
+  if (g.help || args[0] === undefined) {
+    printTrendsHelp({ all: g.helpAll });
+    return 0;
+  }
+
+  try {
+    const first = args[0]!;
+    const woeidRaw = TREND_SUBCOMMANDS.has(first) ? args[1] : first;
+
+    if (!woeidRaw) {
+      printError("Missing required <woeid>.");
+      return 1;
+    }
+
+    if (!isNumericId(woeidRaw)) {
+      throw new ConfigError("<woeid> must be a positive integer.");
+    }
+
+    const woeid = Number(woeidRaw);
+    if (!Number.isInteger(woeid) || woeid <= 0 || woeid > 2147483647) {
+      throw new ConfigError("<woeid> must be an integer in the range 1..2147483647.");
+    }
+
+    const options = getTrendsOptions(argvOpts);
+    const client = clientFactory();
+
+    if (g.raw) {
+      const res = await client.trends.getByWoeid(woeid, {
+        ...options,
+        requestOptions: { raw: true },
+      });
+      printRawData(await parseRawResponse(res), g.outputMode);
+      return 0;
+    }
+
+    const data = await client.trends.getByWoeid(woeid, options);
+    printData(data, g.outputMode, "trends");
     return 0;
   } catch (err: unknown) {
     if (err instanceof ConfigError) {
@@ -708,7 +1030,7 @@ async function runFieldsCommand(args: string[], g: GlobalOptions): Promise<numbe
     return 0;
   }
 
-  const topic = args[0];
+  const topic = typeof args[0] === "string" ? args[0].toLowerCase() : args[0];
   printFieldsHelp({ all: true, topic });
   return 0;
 }
@@ -735,6 +1057,10 @@ export async function main(argv: string[]): Promise<number> {
       printPostsHelp({ all: g.helpAll });
       return 0;
     }
+    if (cmd === "trends") {
+      printTrendsHelp({ all: g.helpAll });
+      return 0;
+    }
     if (cmd === "fields") {
       printFieldsHelp({ all: g.helpAll });
       return 0;
@@ -746,6 +1072,15 @@ export async function main(argv: string[]): Promise<number> {
 
   if (cmd === "fields") {
     return runFieldsCommand(cmdArgs, g);
+  }
+
+  if (cmd === "trends") {
+    if (cmdArgs.length === 0) {
+      printTrendsHelp({ all: false });
+      return 0;
+    }
+    const clientFactory = (): Client => createXClient(g);
+    return runTrendsCommand(clientFactory, cmdArgs, opts, g);
   }
 
   if (cmd === "users" || cmd === "posts") {

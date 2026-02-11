@@ -9,14 +9,18 @@ export function printRootHelp(opts: HelpOpts): void {
   printLine("  xcli [--help] [--help-all] <command> [args] [options]");
   printLine("");
   printLine("Commands:");
-  printLine("  users         Lookup users (inferred input or explicit subcommands)");
-  printLine("  posts         Lookup posts (inferred input or explicit subcommands)");
+  printLine("  users         Lookup users + user search");
+  printLine("  posts         Lookup posts + post search");
+  printLine("  trends        Lookup trends by WOEID");
   printLine("  fields        Show field/expansion references");
   printLine("");
   printLine("Quick examples:");
   printLine("  xcli users XDevelopers");
   printLine("  xcli users 2244994945");
   printLine("  xcli posts https://x.com/XDevelopers/status/1228393702244134912");
+  printLine("  xcli posts search recent --query 'from:XDevelopers -is:retweet'");
+  printLine("  xcli users search --query 'python developer'");
+  printLine("  xcli trends 1");
   printLine("  xcli posts 1228393702244134912 1227640996038684673");
   printLine("  xcli users by-username XDevelopers   # explicit mode");
   printLine("");
@@ -45,7 +49,7 @@ export function printRootHelp(opts: HelpOpts): void {
 }
 
 export function printUsersHelp(opts: HelpOpts): void {
-  printLine("xcli users - user lookup");
+  printLine("xcli users - user lookup and search");
   printLine("");
   printLine("Inferred usage (default):");
   printLine("  xcli users <id|ids|username|usernames|url|urls>");
@@ -55,6 +59,7 @@ export function printUsersHelp(opts: HelpOpts): void {
   printLine("  xcli users by-username <username|@username>");
   printLine("  xcli users by-ids <id...>");
   printLine("  xcli users by-usernames <username...>");
+  printLine("  xcli users search <query...>");
   printLine("");
   printLine("Examples:");
   printLine("  xcli users XDevelopers");
@@ -62,6 +67,8 @@ export function printUsersHelp(opts: HelpOpts): void {
   printLine("  xcli users 2244994945 783214");
   printLine("  xcli users https://x.com/XDevelopers");
   printLine("  xcli users https://x.com/XDevelopers/status/1228393702244134912");
+  printLine("  xcli users search --query 'python developer'");
+  printLine("  xcli users search bun typescript");
 
   if (!opts.all) {
     printLine("");
@@ -75,6 +82,9 @@ export function printUsersHelp(opts: HelpOpts): void {
   printLine("  --user-fields <csv>         Maps to user.fields");
   printLine("  --expansions <csv>          Maps to expansions");
   printLine("  --tweet-fields <csv>        Maps to tweet.fields (when expansions include tweets)");
+  printLine("  --query <text>              Search query (alternative to positional query)");
+  printLine("  --max-results <n>           Search max results (1-1000)");
+  printLine("  --next-token <token>        Search pagination token");
   printLine("  --json                      Output compact JSON");
   printLine("  --json-pretty               Output pretty JSON");
   printLine("  --raw                       Raw HTTP output (debug)");
@@ -84,7 +94,7 @@ export function printUsersHelp(opts: HelpOpts): void {
 }
 
 export function printPostsHelp(opts: HelpOpts): void {
-  printLine("xcli posts - post lookup");
+  printLine("xcli posts - post lookup and search");
   printLine("");
   printLine("Inferred usage (default):");
   printLine("  xcli posts <id|ids|url|urls>");
@@ -92,11 +102,14 @@ export function printPostsHelp(opts: HelpOpts): void {
   printLine("Explicit usage (also supported):");
   printLine("  xcli posts by-id <id|url>");
   printLine("  xcli posts by-ids <id...>");
+  printLine("  xcli posts search [recent|all] <query...>");
   printLine("");
   printLine("Examples:");
   printLine("  xcli posts 1228393702244134912");
   printLine("  xcli posts 1228393702244134912 1227640996038684673");
   printLine("  xcli posts https://x.com/XDevelopers/status/1228393702244134912");
+  printLine("  xcli posts search recent --query 'from:XDevelopers -is:retweet'");
+  printLine("  xcli posts search all --query 'lang:en #ai -is:retweet'");
 
   if (!opts.all) {
     printLine("");
@@ -113,12 +126,49 @@ export function printPostsHelp(opts: HelpOpts): void {
   printLine("  --media-fields <csv>        Maps to media.fields (when expanding media)");
   printLine("  --poll-fields <csv>         Maps to poll.fields (when expanding polls)");
   printLine("  --place-fields <csv>        Maps to place.fields (when expanding places)");
+  printLine("  --query <text>              Search query (alternative to positional query)");
+  printLine("  --max-results <n>           Search max results (recent: 10-100, all: 10-500)");
+  printLine("  --next-token <token>        Search pagination token");
+  printLine("  --start-time <iso8601>      Search lower time bound");
+  printLine("  --end-time <iso8601>        Search upper time bound");
+  printLine("  --since-id <id>             Return posts newer than this ID");
+  printLine("  --until-id <id>             Return posts older than this ID");
+  printLine("  --sort-order <recency|relevancy>");
   printLine("  --json                      Output compact JSON");
   printLine("  --json-pretty               Output pretty JSON");
   printLine("  --raw                       Raw HTTP output (debug)");
   printLine("");
   printLine("Help for fields:");
   printLine("  xcli fields posts");
+}
+
+export function printTrendsHelp(opts: HelpOpts): void {
+  printLine("xcli trends - trends by WOEID");
+  printLine("");
+  printLine("Usage:");
+  printLine("  xcli trends <woeid>");
+  printLine("  xcli trends by-woeid <woeid>");
+  printLine("");
+  printLine("Examples:");
+  printLine("  xcli trends 1");
+  printLine("  xcli trends 23424977");
+
+  if (!opts.all) {
+    printLine("");
+    printLine("Run `xcli trends --help-all` to see all trends options.");
+    return;
+  }
+
+  printLine("");
+  printLine("Options:");
+  printLine("  --max-trends <n>            Max trends to return (1-50)");
+  printLine("  --trend-fields <csv>        Maps to trend.fields");
+  printLine("  --json                      Output compact JSON");
+  printLine("  --json-pretty               Output pretty JSON");
+  printLine("  --raw                       Raw HTTP output (debug)");
+  printLine("");
+  printLine("Help for fields:");
+  printLine("  xcli fields trends");
 }
 
 export function printFieldsHelp(
@@ -130,11 +180,12 @@ export function printFieldsHelp(
     printLine("xcli fields - field and expansion references");
     printLine("");
     printLine("Usage:");
-    printLine("  xcli fields <users|posts>");
+    printLine("  xcli fields <users|posts|trends>");
     printLine("");
     printLine("Examples:");
     printLine("  xcli fields users");
     printLine("  xcli fields posts");
+    printLine("  xcli fields trends");
     return;
   }
 
@@ -176,5 +227,16 @@ export function printFieldsHelp(
     return;
   }
 
-  printLine("Unknown topic. Use: xcli fields users|posts");
+  if (topic === "trends") {
+    printLine("Trend fields");
+    printLine("");
+    printLine("Docs:");
+    printLine("  https://docs.x.com/x-api/trends/get-trends-by-woeid");
+    printLine("");
+    printLine("Common trend.fields values:");
+    printLine("  trend_name,tweet_count");
+    return;
+  }
+
+  printLine("Unknown topic. Use: xcli fields users|posts|trends");
 }

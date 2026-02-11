@@ -24,6 +24,16 @@ X_API_BEARER_TOKEN=... bun run xcli -- users https://x.com/XDevelopers
 X_API_BEARER_TOKEN=... bun run xcli -- posts 1228393702244134912
 X_API_BEARER_TOKEN=... bun run xcli -- posts https://x.com/XDevelopers/status/1228393702244134912
 
+# Post search (recent or full archive)
+X_API_BEARER_TOKEN=... bun run xcli -- posts search recent --query "from:XDevelopers -is:retweet"
+X_API_BEARER_TOKEN=... bun run xcli -- posts search all --query "lang:en #ai -is:retweet"
+
+# User search
+X_API_BEARER_TOKEN=... bun run xcli -- users search --query "python developer"
+
+# Trends by WOEID
+X_API_BEARER_TOKEN=... bun run xcli -- trends 1
+
 # Explicit subcommands still supported
 X_API_BEARER_TOKEN=... bun run xcli -- users by-username XDevelopers
 
@@ -33,6 +43,7 @@ X_API_BEARER_TOKEN=... bun run xcli -- users XDevelopers --json-pretty
 
 # Field references
 bun run xcli -- fields users
+bun run xcli -- fields trends
 ```
 
 Notes:

@@ -1,6 +1,6 @@
 # xcli MVP
 
-This workspace contains a Bun + TypeScript CLI that wraps the official X TypeScript SDK (`@xdevplatform/xdk`) for a small subset of X API v2: read-only lookup for users and posts.
+This workspace contains a Bun + TypeScript CLI that wraps the official X TypeScript SDK (`@xdevplatform/xdk`) for a small subset of X API v2: read-only lookup/search for users/posts and trends by WOEID.
 
 ## Included in MVP
 
@@ -13,10 +13,16 @@ This workspace contains a Bun + TypeScript CLI that wraps the official X TypeScr
     - `xcli users by-id <id>`
     - `xcli users by-username <username|@username>`
     - `xcli users by-ids <id...>`
-    - `xcli users by-usernames <username...>`
-    - `xcli posts by-id <id|url>`
-    - `xcli posts by-ids <id...>`
-  - `xcli fields users|posts` (quick references and doc links)
+      - `xcli users by-usernames <username...>`
+      - `xcli posts by-id <id|url>`
+      - `xcli posts by-ids <id...>`
+  - Search:
+    - `xcli users search <query...>`
+    - `xcli posts search [recent|all] <query...>`
+  - Trends:
+    - `xcli trends <woeid>`
+    - `xcli trends by-woeid <woeid>`
+  - `xcli fields users|posts|trends` (quick references and doc links)
 - Output:
   - Human-readable output by default (tables)
   - Color and styles, respecting TTY, `NO_COLOR`, and `FORCE_COLOR`
@@ -32,7 +38,6 @@ This workspace contains a Bun + TypeScript CLI that wraps the official X TypeScr
 - OAuth 2.0 / OAuth 1.0a user-context flows (no `auth login`, no token refresh, no `users/me`)
 - Any write actions (create/delete posts, likes, follows, bookmarks, etc.)
 - Streaming endpoints
-- Search endpoints (recent search, full-archive search)
 - Pagination helpers (auto-fetching all pages); only single-page lookups are supported
 - Caching, local storage, or persistence of results
 - Config files (no `~/.config/xcli/...`), keychain integration, or interactive prompts
@@ -58,3 +63,6 @@ Or pass `--bearer-token <token>`.
 - Data dictionary: https://docs.x.com/x-api/fundamentals/data-dictionary
 - Users lookup: https://docs.x.com/x-api/users/lookup/introduction
 - Posts lookup: https://docs.x.com/x-api/posts/lookup/introduction
+- Users search: https://docs.x.com/x-api/users/search/introduction.md
+- Posts search: https://docs.x.com/x-api/posts/search/introduction.md
+- Trends by WOEID: https://docs.x.com/x-api/trends/trends-by-woeid/introduction.md

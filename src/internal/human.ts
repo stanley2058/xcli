@@ -131,6 +131,38 @@ export function printPostsHuman(response: unknown): void {
   printMeta(obj);
 }
 
+export function printTrendsHuman(response: unknown): void {
+  const obj = getObject(response);
+  if (!obj) {
+    printLine("No response data.");
+    return;
+  }
+
+  const trends = toArray(obj["data"]).map(getObject).filter((x): x is Record<string, unknown> => Boolean(x));
+
+  if (trends.length === 0) {
+    printLine(style("No trends returned.", "yellow"));
+    printWarnings(obj);
+    return;
+  }
+
+  printLine(style(`Trends (${trends.length})`, "cyan"));
+
+  const headers = ["Name", "Post Count"];
+  const rows = trends.map((trend) => {
+    return [
+      truncate(String(trend["trend_name"] ?? "-"), 64),
+      formatNumber(trend["tweet_count"]),
+    ];
+  });
+
+  for (const line of renderTable(headers.map((h) => style(h, "bold")), rows)) {
+    printLine(line);
+  }
+
+  printWarnings(obj);
+}
+
 export function printRawHuman(payload: {
   status: number;
   statusText: string;
