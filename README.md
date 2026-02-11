@@ -1,5 +1,7 @@
 # xcli
 
+Simple CLI for the X API v2 (currently read-only).
+
 ## Install
 
 ```bash
