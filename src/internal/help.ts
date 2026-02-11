@@ -1,9 +1,15 @@
 import { printLine } from "./util.ts";
 
+declare global {
+  var PACKAGE_VERSION: string;
+}
+globalThis.PACKAGE_VERSION = "dev";
+
 type HelpOpts = { all: boolean };
 
 export function printRootHelp(opts: HelpOpts): void {
   printLine("xcli - CLI for X API v2 (read-only)");
+  printLine(`Version: ${PACKAGE_VERSION}`);
   printLine("");
   printLine("Usage:");
   printLine("  xcli [--help] [--help-all] <command> [args] [options]");

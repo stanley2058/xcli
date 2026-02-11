@@ -1,10 +1,16 @@
 {
-  "name": "xcli",
+  "name": "@stanley2058/xcli",
+  "version": "0.0.1",
   "module": "index.ts",
   "type": "module",
-  "private": true,
+  "repository": "https://github.com/stanley2058/xcli",
+  "license": "MIT",
+  "bin": {
+    "xcli": "./dist/index.js"
+  },
   "scripts": {
-    "xcli": "bun run index.ts"
+    "xcli": "bun run index.ts",
+    "build": "bun run build.ts && chmod +x dist/index.js"
   },
   "devDependencies": {
     "@types/bun": "latest"
@@ -14,5 +20,11 @@
   },
   "dependencies": {
     "@xdevplatform/xdk": "^0.4.0"
-  }
+  },
+  "files": [
+    "dist",
+    "package.json",
+    "README.md",
+    "LICENSE"
+  ]
 }

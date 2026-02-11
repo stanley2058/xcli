@@ -1,16 +1,24 @@
 # xcli
 
-To install dependencies:
+## Install
 
 ```bash
-bun install
+npm i -g @stanley2058/xcli
+# or
+bun i -g @stanley2058/xcli
+
+xcli --help
 ```
 
-To run:
+Or run:
 
 ```bash
-bun run xcli -- --help
+npx @stanley2058/xcli --help
+# or
+bunx @stanley2058/xcli --help
 ```
+
+## Usage
 
 Examples:
 
@@ -68,4 +76,16 @@ Notes:
 - `trends search` uses a public WOEID index, fetched on demand and cached locally.
 - Optional: set `XCLI_WOEID_CACHE_PATH` to override the default cache file path.
 
-This project was created using `bun init` in bun v1.3.8. [Bun](https://bun.com) is a fast all-in-one JavaScript runtime.
+## Development
+
+To install dependencies:
+
+```bash
+bun install
+```
+
+To run:
+
+```bash
+bun run xcli -- --help
+```
