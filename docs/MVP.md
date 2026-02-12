@@ -31,7 +31,7 @@ This workspace contains a Bun + TypeScript CLI that wraps the official X TypeScr
   - `--json` for compact JSON
   - `--json-pretty` for indented JSON
   - `--raw` to print status + headers + body (useful for debugging rate limits)
-  - Optional media asset download for posts via `--download-media` (`--media-dir` to control output path)
+- Optional post attachment download via `--download-media` (`--media-dir` to control output path)
 - Help:
   - `--help` at root and on subcommands, e.g. `xcli users --help`
   - `--help-all` for verbose help

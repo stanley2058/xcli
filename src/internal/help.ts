@@ -24,6 +24,7 @@ export function printRootHelp(opts: HelpOpts): void {
   printLine("  xcli users XDevelopers");
   printLine("  xcli users 2244994945");
   printLine("  xcli posts https://x.com/XDevelopers/status/1228393702244134912");
+  printLine("  xcli posts 1228393702244134912 --download-media");
   printLine("  xcli posts search recent --query 'from:XDevelopers -is:retweet'");
   printLine("  xcli users search --query 'python developer'");
   printLine("  xcli trends 1");
@@ -118,6 +119,7 @@ export function printPostsHelp(opts: HelpOpts): void {
   printLine("  xcli posts https://x.com/XDevelopers/status/1228393702244134912");
   printLine("  xcli posts search recent --query 'from:XDevelopers -is:retweet'");
   printLine("  xcli posts search all --query 'lang:en #ai -is:retweet'");
+  printLine("  xcli posts 1228393702244134912 --download-media");
   printLine("  xcli posts <id|url> --expansions attachments.media_keys --media-fields media_key,type,url --download-media");
 
   if (!opts.all) {
@@ -135,7 +137,7 @@ export function printPostsHelp(opts: HelpOpts): void {
   printLine("  --media-fields <csv>        Maps to media.fields (when expanding media)");
   printLine("  --poll-fields <csv>         Maps to poll.fields (when expanding polls)");
   printLine("  --place-fields <csv>        Maps to place.fields (when expanding places)");
-  printLine("  --download-media            Download media files from resolved media URLs");
+  printLine("  --download-media            Download post attachment files from resolved media URLs");
   printLine("  --media-dir <path>          Output directory for --download-media (default: ./xcli-media)");
   printLine("  --query <text>              Search query (alternative to positional query)");
   printLine("  --max-results <n>           Search max results (recent: 10-100, all: 10-500)");

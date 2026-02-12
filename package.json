@@ -1,6 +1,6 @@
 {
   "name": "@stanley2058/xcli",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "module": "index.ts",
   "type": "module",
   "repository": "https://github.com/stanley2058/xcli",

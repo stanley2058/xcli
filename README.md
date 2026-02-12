@@ -34,7 +34,8 @@ X_API_BEARER_TOKEN=... bun run xcli -- users https://x.com/XDevelopers
 X_API_BEARER_TOKEN=... bun run xcli -- posts 1228393702244134912
 X_API_BEARER_TOKEN=... bun run xcli -- posts https://x.com/XDevelopers/status/1228393702244134912
 
-# Download post media files (when media URLs are available)
+# Download post attachment files (when media URLs are available)
+X_API_BEARER_TOKEN=... bun run xcli -- posts 1228393702244134912 --download-media
 X_API_BEARER_TOKEN=... bun run xcli -- posts 1228393702244134912 --expansions attachments.media_keys --media-fields media_key,type,url,preview_image_url --download-media
 
 # Post search (recent or full archive)

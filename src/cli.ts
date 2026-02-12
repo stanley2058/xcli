@@ -641,7 +641,7 @@ async function maybeDownloadPostMedia(
   const { downloadable } = collectPostMedia(response);
   if (downloadable.length === 0) {
     const hint =
-      "No downloadable media URLs found. Include --expansions attachments.media_keys and --media-fields media_key,type,url,preview_image_url.";
+      "No downloadable attachment media URLs found. Include --expansions attachments.media_keys and --media-fields media_key,type,url,preview_image_url.";
     if (g.outputMode === "human") {
       printLine(style(hint, "yellow"));
     } else {
