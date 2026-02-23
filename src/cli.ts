@@ -397,6 +397,8 @@ function getPostsLookupOptions(argvOpts: Record<string, string | boolean>): Requ
             "author_id",
             "conversation_id",
             "attachments",
+            "referenced_tweets",
+            "entities",
           ],
           expansions: ["author_id", "attachments.media_keys"],
           userFields: ["username", "name", "verified"],

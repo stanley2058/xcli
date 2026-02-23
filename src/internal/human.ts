@@ -42,6 +42,134 @@ function pickNumberField(obj: Record<string, unknown>, keys: string[]): number |
   return typeof value === "number" ? value : undefined;
 }
 
+function isTcoUrl(url: string): boolean {
+  try {
+    const host = new URL(url).hostname.toLowerCase();
+    return host === "t.co" || host === "www.t.co";
+  } catch {
+    return /https?:\/\/t\.co\//i.test(url);
+  }
+}
+
+function looksLikeMediaUrl(url: string | undefined): boolean {
+  if (!url) return false;
+
+  try {
+    const parsed = new URL(url);
+    const host = parsed.hostname.toLowerCase().replace(/^www\./, "");
+    const path = parsed.pathname.toLowerCase();
+    if (host === "pic.x.com" || host === "pic.twitter.com") return true;
+    return path.includes("/photo/") || path.includes("/video/");
+  } catch {
+    const lower = url.toLowerCase();
+    if (lower.includes("pic.x.com/") || lower.includes("pic.twitter.com/")) return true;
+    return lower.includes("/photo/") || lower.includes("/video/");
+  }
+}
+
+function extractQuotedPostId(post: Record<string, unknown>): string | undefined {
+  const raw = pickField(post, ["referenced_tweets", "referencedTweets"]);
+  if (raw === undefined) return undefined;
+
+  const refs = toArray(raw).map(getObject).filter((x): x is Record<string, unknown> => Boolean(x));
+  for (const ref of refs) {
+    const refType = pickStringField(ref, ["type"]);
+    if (refType !== "quoted") continue;
+
+    const id = pickStringField(ref, ["id"]);
+    if (id) return id;
+  }
+
+  return undefined;
+}
+
+function getQuoteDisplay(post: Record<string, unknown>): string {
+  const raw = pickField(post, ["referenced_tweets", "referencedTweets"]);
+  if (raw === undefined) return "-";
+
+  const refs = toArray(raw).map(getObject).filter((x): x is Record<string, unknown> => Boolean(x));
+  if (refs.length === 0) return "false";
+
+  for (const ref of refs) {
+    const refType = pickStringField(ref, ["type"]);
+    if (refType !== "quoted") continue;
+
+    return pickStringField(ref, ["id"]) ?? "-";
+  }
+
+  return "false";
+}
+
+type PostUrlEntity = {
+  shortUrl: string;
+  expandedUrl?: string;
+  displayUrl?: string;
+};
+
+function getPostUrlEntities(post: Record<string, unknown>): PostUrlEntity[] {
+  const entities = pickObjectField(post, ["entities"]);
+  if (!entities) return [];
+
+  return toArray(entities["urls"])
+    .map(getObject)
+    .filter((x): x is Record<string, unknown> => Boolean(x))
+    .map((entry) => ({
+      shortUrl: pickStringField(entry, ["url"]) ?? "",
+      expandedUrl: pickStringField(entry, ["expanded_url", "expandedUrl"]),
+      displayUrl: pickStringField(entry, ["display_url", "displayUrl"]),
+    }))
+    .filter((entry) => entry.shortUrl.length > 0);
+}
+
+function matchesQuotedStatusUrl(url: string | undefined, quotedPostId: string | undefined): boolean {
+  if (!url || !quotedPostId) return false;
+  const match = url.match(/\/status\/(\d+)/);
+  return (match?.[1] ?? "") === quotedPostId;
+}
+
+function formatPostText(post: Record<string, unknown>): string {
+  const rawText = typeof post["text"] === "string" ? compactWhitespace(post["text"]) : "-";
+  if (rawText === "-") return rawText;
+
+  const quotedPostId = extractQuotedPostId(post);
+  const urlEntities = getPostUrlEntities(post);
+  if (urlEntities.length === 0) return rawText;
+
+  let text = rawText;
+  let mediaCounter = 0;
+  const replacements = new Map<string, string>();
+
+  for (const entity of urlEntities) {
+    if (!isTcoUrl(entity.shortUrl)) continue;
+
+    const existing = replacements.get(entity.shortUrl);
+    if (existing) {
+      text = text.split(entity.shortUrl).join(existing);
+      continue;
+    }
+
+    const isQuoteLink =
+      matchesQuotedStatusUrl(entity.expandedUrl, quotedPostId) ||
+      matchesQuotedStatusUrl(entity.displayUrl, quotedPostId);
+
+    if (isQuoteLink) {
+      replacements.set(entity.shortUrl, "[quote]");
+      text = text.split(entity.shortUrl).join("[quote]");
+      continue;
+    }
+
+    const isMediaLink = looksLikeMediaUrl(entity.expandedUrl) || looksLikeMediaUrl(entity.displayUrl);
+    if (!isMediaLink) continue;
+
+    mediaCounter += 1;
+    const placeholder = `[img${mediaCounter}]`;
+    replacements.set(entity.shortUrl, placeholder);
+    text = text.split(entity.shortUrl).join(placeholder);
+  }
+
+  return text;
+}
+
 function printWarnings(response: Record<string, unknown>): void {
   const errors = toArray(response["errors"]);
   if (errors.length === 0) return;
@@ -173,7 +301,7 @@ export function printPostsHuman(response: unknown): void {
   const tableWidth = getUsableTerminalWidth(80);
   const prepared = posts.map((post) => {
     const metrics = pickObjectField(post, ["public_metrics", "publicMetrics"]);
-    const text = typeof post["text"] === "string" ? compactWhitespace(post["text"]) : "-";
+    const text = formatPostText(post);
     const repostCount = pickField(metrics ?? {}, [
       "retweet_count",
       "retweetCount",
@@ -194,28 +322,41 @@ export function printPostsHuman(response: unknown): void {
       reposts: formatNumber(repostCount),
       media: formatPostMediaSummary(mediaSummary),
       downloadable: formatPostMediaDownloadable(mediaSummary),
+      quote: getQuoteDisplay(post),
       text,
     };
   });
 
   if (tableWidth < 100) {
-    const headers = ["ID", "Author", "Created", "Media", "DL", "Text"];
+    const headers = ["ID", "Author", "Created", "Media", "DL", "Quote", "Text"];
     const rows = prepared.map((post) => [
       post.id,
       post.author,
       post.created,
       post.media,
       post.downloadable,
+      post.quote,
       post.text,
     ]);
 
-    printTable(headers, rows, [19, 12, 10, 5, 2, 20], tableWidth);
+    printTable(headers, rows, [19, 12, 10, 5, 2, 5, 20], tableWidth);
     printWarnings(obj);
     printMeta(obj);
     return;
   }
 
-  const headers = ["ID", "Author", "Created", "Likes", "Replies", "Reposts", "Media", "DL", "Text"];
+  const headers = [
+    "ID",
+    "Author",
+    "Created",
+    "Likes",
+    "Replies",
+    "Reposts",
+    "Media",
+    "DL",
+    "Quote",
+    "Text",
+  ];
   const rows = prepared.map((post) => [
     post.id,
     post.author,
@@ -225,10 +366,11 @@ export function printPostsHuman(response: unknown): void {
     post.reposts,
     post.media,
     post.downloadable,
+    post.quote,
     post.text,
   ]);
 
-  printTable(headers, rows, [19, 8, 10, 5, 7, 7, 5, 2, 20], tableWidth);
+  printTable(headers, rows, [19, 8, 10, 5, 7, 7, 5, 2, 5, 20], tableWidth);
 
   printWarnings(obj);
   printMeta(obj);

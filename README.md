@@ -79,7 +79,8 @@ Notes:
 
 - Default output is human-readable tables.
 - Color output honors TTY, `NO_COLOR`, and `FORCE_COLOR`.
-- Post tables include short media fields: `Media` (e.g. `img2,vid1`) and `DL` (downloadable/total).
+- Post tables include `Media`, `DL` (downloadable/total), and `Quote` (`false` or quoted post ID).
+- In post text, media/quote `t.co` links are rewritten to placeholders like `[img1]` and `[quote]`.
 - `trends search` uses a public WOEID index, fetched on demand and cached locally.
 - Optional: set `XCLI_WOEID_CACHE_PATH` to override the default cache file path.
 
